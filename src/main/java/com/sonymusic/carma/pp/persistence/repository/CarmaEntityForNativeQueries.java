@@ -5,17 +5,23 @@ import jakarta.persistence.*;
 
 @Entity
 @NamedNativeQuery(name = "getContractIdUserExportedPairByCountryIds", query =
-	"SELECT  c.contract_id,c.is_user_exported FROM contract c "
+	"SELECT  c.contract_id, "
+		+ "case when vd.template_id =9000 then 'Y' "
+		+ "else c.is_user_exported end as is_user_exported "
+		+ "FROM contract c "
 		+ "JOIN v_document vd ON c.document_id = vd.document_id "
-		+ "WHERE vd.country_id IN :countryIds AND vd.template_id = 5056 "
+		+ "WHERE vd.country_id IN :countryIds AND vd.template_id in (5056,9000)"
 		+ "AND c.status_flag ='A' ",
 	resultClass = ContractIdUserExportedPair.class,
 	resultSetMapping = "getContractIdUserExportedPair")
 
 @NamedNativeQuery(name = "getContractIdUserExportedPairByContractIds", query =
-	"SELECT  c.contract_id,c.is_user_exported FROM contract c "
+	"SELECT  c.contract_id, "
+		+ "case when vd.template_id =9000 then 'Y' "
+		+ "else c.is_user_exported end as is_user_exported "
+		+ "FROM contract c "
 		+ "JOIN v_document vd ON c.document_id = vd.document_id "
-		+ "WHERE c.contract_id IN :contractIds AND vd.template_id = 5056 "
+		+ "WHERE c.contract_id IN :contractIds AND vd.template_id in (5056,9000) "
 		+ "AND c.status_flag ='A' ",
 	resultClass = ContractIdUserExportedPair.class,
 	resultSetMapping = "getContractIdUserExportedPair")
