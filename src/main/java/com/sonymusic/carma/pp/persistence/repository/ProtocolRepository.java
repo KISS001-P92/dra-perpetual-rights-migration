@@ -25,4 +25,7 @@ public interface ProtocolRepository extends JpaRepository<ProtocolEntity, Long> 
 
 	@Query(value = "SELECT digital_rights_contract_eu_id FROM dra_perpetual_rights_migration_protocol WHERE status_flag='A' AND dra_perpetual_rights_migration_input_id IN (:draPerpetualRightsMigrationInputIds)", nativeQuery = true)
 	List<Integer> selectDigitalRightsContractEUIdByInputViewIds(Set<Integer> draPerpetualRightsMigrationInputIds);
+
+	@Query(value = "SELECT contract_id FROM dra_perpetual_rights_migration_protocol WHERE status_flag='A' AND result_status='SUCCESS' AND (digital_rights_contract_eu_id is not null OR digital_rights_contract_us_id is not null) AND dra_perpetual_rights_migration_input_id IN (:draPerpetualRightsMigrationInputIds)", nativeQuery = true)
+	Set<Integer> getAllSuccessedAndNewDigitalRights(Set<Integer> draPerpetualRightsMigrationInputIds);
 }

@@ -4,6 +4,7 @@ import com.sonymusic.carma.pp.model.MigrationStatistics;
 import com.sonymusic.carma.pp.persistence.converter.ClearanceValue;
 import com.sonymusic.carma.pp.persistence.entity.*;
 import com.sonymusic.carma.pp.persistence.repository.*;
+import com.sonymusic.carma.sapi.preference.PreferenceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -26,6 +27,9 @@ public class MigrationService {
 	private final InputRightsUSRepository inputRightsUSRepository;
 	private final ProtocolRepository protocolRepository;
 	private final MailService mailService;
+	private final PreferenceRepository preferenceRepository;
+	private final DraValidator draValidator;
+
 	private static final Integer PERPETUAL_HIERARCHY_ID = 21;
 	private static final Integer ADMIN_USER = 99999998;
 
@@ -65,9 +69,17 @@ public class MigrationService {
 		log.info("Migrating {} Recording levels", groupedByRecording.size());
 		Set<Integer> instanceIdToBeMigrated = new HashSet<>();
 		groupedByRecording.forEach((key, value) -> statistics.merge(migrate(key, value, actionId, instanceIdToBeMigrated)));
-		// execute validation for all
-		//List<Integer> failedValidation = validateDigitalRights(contractIds);
-		//statistics.addFailedValidationContractIds(failedValidation);
+
+		// execute validation for those where No Digital Rights was defined before
+		Set<InputPerpetualRightsViewEntity> noDigitalRighstOnAnyLevelInputRows =
+			validRightsWithRecording.stream().filter(item -> StringUtils.isEmpty(item.getContractMasterClearance())
+				&& StringUtils.isEmpty(item.getPeriodMasterClearance())
+				&& StringUtils.isEmpty((item.getRecordingMasterClearance()))).collect(Collectors.toSet());
+
+		Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(
+			noDigitalRighstOnAnyLevelInputRows.stream().map(InputPerpetualRightsViewEntity::getId).collect(Collectors.toSet()));
+		List<Integer> failedValidation = validateDigitalRights(contractIdsToBeValidate);
+		statistics.addFailedValidationContractIds(failedValidation);
 		return statistics;
 	}
 
@@ -251,20 +263,30 @@ public class MigrationService {
 				digitalRightsIds.forEach(digitalRightsEURepository::deleteById);
 				inputIds.forEach(inputRightsEURepository::updateCleared);
 			}
+			// delete validation for those where No Digital Rights was defined before
+			Set<InputPerpetualRightsViewEntity> noDigitalRighstOnAnyLevelInputRows =
+				rights.stream().filter(item -> StringUtils.isEmpty(item.getContractMasterClearance())
+					&& StringUtils.isEmpty(item.getPeriodMasterClearance())
+					&& StringUtils.isEmpty((item.getRecordingMasterClearance()))).collect(Collectors.toSet());
+
+			Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(
+				noDigitalRighstOnAnyLevelInputRows.stream().map(InputPerpetualRightsViewEntity::getId).collect(Collectors.toSet()));
+			List<Integer> failedValidation = validateDigitalRights(contractIdsToBeValidate);
+
 			contractIds.forEach(protocolRepository::deleteAllByContractId);
-			//		validateDigitalRights(contractIds);
+
 		}
 	}
 
-	//	private List<Integer> validateDigitalRights(Set<Integer> contractIds) {
-	//		String url = preferenceRepository.getValueByName("carma.server.url") + "/dra-interface/digital-rights";
-	//		List<Integer> validationFailed = new ArrayList<>();
-	//		for (Integer contractId : contractIds) {
-	//			if (!draValidator.validateDigitalRights(url, contractId, MOD_USER)) {
-	//				validationFailed.add(contractId);
-	//			}
-	//		}
-	//		return validationFailed;
-	//	}
+	private List<Integer> validateDigitalRights(Set<Integer> contractIds) {
+		String url = preferenceRepository.getValueByName("carma.server.url") + "/dra-interface/digital-rights";
+		List<Integer> validationFailed = new ArrayList<>();
+		for (Integer contractId : contractIds) {
+			if (!draValidator.validateDigitalRights(url, contractId, MOD_USER)) {
+				validationFailed.add(contractId);
+			}
+		}
+		return validationFailed;
+	}
 
 }

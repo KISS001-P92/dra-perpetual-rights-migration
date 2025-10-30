@@ -14,7 +14,7 @@ public class MigrationStatistics {
 	List<Integer> contractIds = new ArrayList<>();
 	Long skippedCount = 0L;
 	Long failedCount = 0L;
-	//	List<Integer> failedValidationContractIds = new ArrayList<>();
+	List<Integer> failedValidationContractIds = new ArrayList<>();
 	Integer actionId;
 	List<Integer> relatedContractIds = new ArrayList<>();
 
@@ -46,9 +46,9 @@ public class MigrationStatistics {
 		this.relatedContractIds.add(contractId);
 	}
 
-	//	public void addFailedValidationContractIds(List<Integer> contractIds) {
-	//		this.failedValidationContractIds.addAll(contractIds);
-	//	}
+	public void addFailedValidationContractIds(List<Integer> contractIds) {
+		this.failedValidationContractIds.addAll(contractIds);
+	}
 
 	public void merge(MigrationStatistics other) {
 		this.digitalRightsCount += other.digitalRightsCount;
