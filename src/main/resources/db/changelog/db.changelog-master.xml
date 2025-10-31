@@ -1,0 +1,56 @@
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="CAS-15082 drop views" author="kiss001">
+        <sql>
+            DROP VIEW if EXISTS v_dra_sending_perpetual_digital_rights_to_dra_reconciliation;
+            DROP VIEW if EXISTS v_dra_perpetual_rights_migration_reconciliation;
+            DROP VIEW if EXISTS v_dra_perpetual_rights_migration_input;
+        </sql>
+    </changeSet>
+    <changeSet id="CAS-15082 drop protocol table" author="kiss001">
+        <sql>
+            DROP TABLE if EXISTS dra_perpetual_rights_migration_protocol;
+            DROP SEQUENCE if EXISTS dra_perpetual_rights_protocol_action_id_seq;
+        </sql>
+    </changeSet>
+    <changeSet id="CAS-15082 drop input table eu" author="kiss001">
+        <sql>
+            DROP TABLE if EXISTS dra_perpetual_rights_migration_input_eu;
+        </sql>
+    </changeSet>
+    <changeSet id="CAS-15082 drop input table us" author="kiss001">
+        <sql>
+            DROP TABLE if EXISTS dra_perpetual_rights_migration_input_us;
+        </sql>
+    </changeSet>
+    <changeSet id="CAS-15082 create input table us" author="kiss01">
+        <sqlFile
+                path="dra_perpetual_rights_migration_input_us.sql"
+                relativeToChangelogFile="true"
+        />
+    </changeSet>
+    <changeSet id="CAS-15082 create input table eu" author="kiss01">
+        <sqlFile
+                path="dra_perpetual_rights_migration_input_eu.sql"
+                relativeToChangelogFile="true"
+        />
+    </changeSet>
+    <changeSet id="CAS-15082 create protocol table" author="kiss001">
+        <sqlFile
+                path="dra_perpetual_rights_migration_protocol.sql"
+                relativeToChangelogFile="true"
+        />
+        <createSequence sequenceName="dra_perpetual_rights_protocol_action_id_seq"/>
+    </changeSet>
+    <changeSet id="CAS-15082 input view" author="kiss001">
+        <sqlFile
+                path="v_dra_perpetual_rights_migration_input.sql"
+                relativeToChangelogFile="true"
+        />
+    </changeSet>
+
+</databaseChangeLog>

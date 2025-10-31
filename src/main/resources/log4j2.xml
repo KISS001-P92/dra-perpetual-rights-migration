@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="INFO" monitorInterval="30">
+	<!-- Must be present so that spring-boot-starter-log4j2 starts up;
+		Configuration is done centrally (see log4j.configurationFile system property) -->
+  <Appenders>
+    <RollingFile name="MIGRATION_APPENDER">
+	  <FileName>${sys:logFileLocation}/dra-perpetual-rights-migration.log</FileName>
+      <FilePattern>${sys:logFileLocation}/dra-perpetual-rights-migration.%d{yyyy-MM-dd}.log</FilePattern>
+      <PatternLayout>
+		<Pattern>[%-5p] [%d{yyyy-MM-dd HH:mm:ss,SSS}] [%-25.25t] [%-25.25c{1}] [%-7.7X{userId}] - %m%n</Pattern>
+      </PatternLayout>
+      <Policies>
+        <TimeBasedTriggeringPolicy/>
+      </Policies>
+    </RollingFile>
+    <Console name="STDOUT" target="SYSTEM_OUT">
+      <PatternLayout>
+		<Pattern>[%-5p] [%d{yyyy-MM-dd HH:mm:ss,SSS}] [%-25.25t] [%-25.25c{1}] [%-7.7X{userId}] - %m%n</Pattern>
+      </PatternLayout>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Logger name="com.sonymusic.carma" level="debug">
+      <AppenderRef ref="MIGRATION_APPENDER"/>
+    </Logger>
+    <Logger name="org.hibernate" level="info">
+      <AppenderRef ref="MIGRATION_APPENDER"/>
+    </Logger>
+    <Root level="error">
+      <AppenderRef ref="STDOUT"/>
+    </Root>
+  </Loggers>
+</Configuration>

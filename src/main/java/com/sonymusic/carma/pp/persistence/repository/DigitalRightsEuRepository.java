@@ -1,0 +1,15 @@
+package com.sonymusic.carma.pp.persistence.repository;
+
+import com.sonymusic.carma.pp.persistence.entity.DigitalRightsEntityEU;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.transaction.annotation.Transactional;
+
+@Transactional
+public interface DigitalRightsEuRepository extends JpaRepository<DigitalRightsEntityEU, Long> {
+
+	@Modifying
+	@Query(value = "UPDATE digital_rights_contract_eu SET status_flag = 'D', mod_stamp = NOW(), mod_user = 99999998 WHERE status_flag='A' AND digital_rights_contract_eu_id = :id", nativeQuery = true)
+	void deleteById(Integer id);
+}
