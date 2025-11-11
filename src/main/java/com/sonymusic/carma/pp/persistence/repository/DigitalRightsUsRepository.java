@@ -12,4 +12,5 @@ public interface DigitalRightsUsRepository extends JpaRepository<DigitalRightsEn
 	@Modifying
 	@Query(value = "UPDATE digital_rights_contract_us SET status_flag = 'D', mod_stamp = NOW(), mod_user = 99999998 WHERE status_flag='A' AND digital_rights_contract_us_id = :id", nativeQuery = true)
 	void deleteById(Integer id);
+
 }
