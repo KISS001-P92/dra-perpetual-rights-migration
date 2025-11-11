@@ -1,6 +1,7 @@
 package com.sonymusic.carma.pp.persistence.repository;
 
 import com.sonymusic.carma.pp.persistence.entity.ContractIdUserExportedPair;
+import com.sonymusic.carma.pp.persistence.entity.DigitalRightsNodeInstanceAndClearanceData;
 import jakarta.persistence.*;
 
 @Entity
@@ -30,6 +31,31 @@ import jakarta.persistence.*;
 	@ConstructorResult(targetClass = ContractIdUserExportedPair.class, columns = {
 		@ColumnResult(name = "contract_id", type = Integer.class),
 		@ColumnResult(name = "is_user_exported", type = String.class)
+	})
+
+})
+
+@NamedNativeQuery(name = "getExistingPerpetualDigitalRightsForUSContracts", query =
+	"SELECT drcu.node_instance_id, drcu.dra_rights_hierarchy_id, drcu.cleared as clearance "
+		+ "FROM digital_rights_contract_us drcu "
+		+ "JOIN node_instance ni ON drcu.node_instance_id = ni.node_instance_id and ni.status_flag ='A' "
+		+ "WHERE drcu.status_flag ='A' and ni.contract_id in (:contractIds) and drcu.dra_rights_hierarchy_id in (21,22,23) ",
+	resultClass = DigitalRightsNodeInstanceAndClearanceData.class,
+	resultSetMapping = "getExistingPerpetualDigitalRightsForContracts")
+
+@NamedNativeQuery(name = "getExistingPerpetualDigitalRightsForEUContracts", query =
+	"SELECT drcu.node_instance_id, drcu.dra_rights_hierarchy_id, drcu.approval_term as clearance "
+		+ "FROM digital_rights_contract_eu drcu "
+		+ "JOIN node_instance ni ON drcu.node_instance_id = ni.node_instance_id and ni.status_flag ='A' "
+		+ " WHERE drcu.status_flag ='A' and ni.contract_id in (:contractIds) and drcu.dra_rights_hierarchy_id in (21,22,23) ",
+	resultClass = DigitalRightsNodeInstanceAndClearanceData.class,
+	resultSetMapping = "getExistingPerpetualDigitalRightsForContracts")
+
+@SqlResultSetMapping(name = "getExistingPerpetualDigitalRightsForContracts", classes = {
+	@ConstructorResult(targetClass = DigitalRightsNodeInstanceAndClearanceData.class, columns = {
+		@ColumnResult(name = "node_instance_id", type = Integer.class),
+		@ColumnResult(name = "dra_rights_hierarchy_id", type = Integer.class),
+		@ColumnResult(name = "clearance", type = String.class)
 	})
 })
 

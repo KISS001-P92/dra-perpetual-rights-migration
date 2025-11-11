@@ -14,10 +14,10 @@ public class ClearanceValueConverter implements AttributeConverter<ClearanceValu
 		return dbData == null ? null : ("Y".equals(dbData) ? ClearanceValue.YES : ClearanceValue.NO);
 	}
 
-	public ClearanceValue convertToEntityAttributeFromInput(String value) {
+	public static ClearanceValue convertToEntityAttributeFromInput(String value) {
 		return StringUtils.isEmpty(value) ?
 			null :
-			("Y".equals(value) || "YES".equals(value)) ? ClearanceValue.YES
-				: ("N".equals(value) || "NO".equals(value) ? ClearanceValue.NO : ClearanceValue.INVALID);
+			("Y".equalsIgnoreCase(value) || "YES".equalsIgnoreCase(value)) ? ClearanceValue.YES
+				: ("N".equalsIgnoreCase(value) || "NO".equalsIgnoreCase(value) ? ClearanceValue.NO : ClearanceValue.INVALID);
 	}
 }
