@@ -6,8 +6,6 @@
 
     <changeSet id="CAS-15082 drop views" author="kiss001">
         <sql>
-            DROP VIEW if EXISTS v_dra_sending_perpetual_digital_rights_to_dra_reconciliation;
-            DROP VIEW if EXISTS v_dra_perpetual_rights_migration_reconciliation;
             DROP VIEW if EXISTS v_dra_perpetual_rights_migration_input;
         </sql>
     </changeSet>

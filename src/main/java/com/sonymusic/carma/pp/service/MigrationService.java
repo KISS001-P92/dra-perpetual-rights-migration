@@ -259,6 +259,7 @@ public class MigrationService {
 				.approvalTerm(toBeInserted.getClearanceValue() == ClearanceValue.YES)
 				.draRightsHierarchyId(PERPETUAL_HIERARCHY_ID)
 				.territory(toBeInserted.getTerritory())
+				.modStamp(LocalDateTime.now())
 				.modUser(ADMIN_USER)
 				.statusFlag(true)
 				.build());
