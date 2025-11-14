@@ -60,8 +60,8 @@ public class InputPerpetualRightsViewEntity {
 	private String perpetualRights;
 	@Column(name = "perpetual_rights_exception")
 	private String perpetualRightsException;
-	@Column(name = "inhereted_clearance")
-	private String inheretedClearance;
+	@Column(name = "inherited_clearance")
+	private String inheritedClearance;
 	@Column(name = "intended_clearance")
 	private String intendedClearance;
 	@Column(name = "status_flag")

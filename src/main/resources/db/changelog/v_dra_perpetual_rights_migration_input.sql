@@ -24,7 +24,7 @@ select dprus.id  id,
             when  dprus."Period Master Clearance"!='' then "Period Master Clearance"
             when  dprus."Contract Master Clearance"!='' then "Contract Master Clearance"
             else null
-        end as inhereted_clearance,
+        end as inherited_clearance,
        case when  dprus."Perpetual Rights Exception"!='' then substring( dprus."Perpetual Rights Exception",1,1)
             when  dprus."Perpetual Rights"!='' then substring( dprus."Perpetual Rights",1,1)
             else null
@@ -68,7 +68,7 @@ select dprus.id as id,
             when  dprus."Period Master Clearance"!='' then "Period Master Clearance"
             when  dprus."Contract Master Clearance"!='' then "Contract Master Clearance"
             else null
-        end as inhereted_clearance,
+        end as inherited_clearance,
        case when  dprus."Perpetual Rights Exception"!='' then substring( dprus."Perpetual Rights Exception",1,1)
             when  dprus."Perpetual Rights"!='' then substring( dprus."Perpetual Rights",1,1)
             else null
