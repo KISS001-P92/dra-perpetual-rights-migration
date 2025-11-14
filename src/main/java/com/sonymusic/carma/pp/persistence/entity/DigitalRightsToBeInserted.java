@@ -1,6 +1,5 @@
 package com.sonymusic.carma.pp.persistence.entity;
 
-import com.sonymusic.carma.pp.persistence.converter.ClearanceValue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

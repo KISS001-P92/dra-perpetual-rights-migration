@@ -1,5 +1,6 @@
 package com.sonymusic.carma.pp.persistence.converter;
 
+import com.sonymusic.carma.pp.persistence.entity.ClearanceValue;
 import jakarta.persistence.AttributeConverter;
 import org.apache.commons.lang3.StringUtils;
 
@@ -15,9 +16,11 @@ public class ClearanceValueConverter implements AttributeConverter<ClearanceValu
 	}
 
 	public static ClearanceValue convertToEntityAttributeFromInput(String value) {
+		value = StringUtils.trim(value);
 		return StringUtils.isEmpty(value) ?
 			null :
 			("Y".equalsIgnoreCase(value) || "YES".equalsIgnoreCase(value)) ? ClearanceValue.YES
-				: ("N".equalsIgnoreCase(value) || "NO".equalsIgnoreCase(value) ? ClearanceValue.NO : ClearanceValue.INVALID);
+				: ("N".equalsIgnoreCase(value) || "NO".equalsIgnoreCase(value)) ? ClearanceValue.NO
+				: "".equalsIgnoreCase(value) ? ClearanceValue.EMPTY : ClearanceValue.INVALID;
 	}
 }

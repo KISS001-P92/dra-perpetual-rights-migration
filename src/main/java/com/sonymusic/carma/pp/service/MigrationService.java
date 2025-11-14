@@ -1,7 +1,6 @@
 package com.sonymusic.carma.pp.service;
 
 import com.sonymusic.carma.pp.model.MigrationStatistics;
-import com.sonymusic.carma.pp.persistence.converter.ClearanceValue;
 import com.sonymusic.carma.pp.persistence.converter.ClearanceValueConverter;
 import com.sonymusic.carma.pp.persistence.entity.*;
 import com.sonymusic.carma.pp.persistence.repository.*;
@@ -95,14 +94,29 @@ public class MigrationService {
 			Map<Integer, List<InputPerpetualRightsViewEntity>> groupedByContract = validRightsWithRecording.stream()
 				.collect(Collectors.groupingBy(InputPerpetualRightsViewEntity::getContractId));
 			//Execute migration grouped by contract
+
 			for (Integer contractId : groupedByContract.keySet()) {
 				List<InputPerpetualRightsViewEntity> validRightsByContract = groupedByContract.get(contractId);
 				log.info("Migrating for Contract: {} contractId = {}", validRightsByContract.get(0).getContractNumber(), contractId);
 				Map<Integer, List<InputPerpetualRightsViewEntity>> groupedByRecording = validRightsByContract.stream()
 					.collect(Collectors.groupingBy(InputPerpetualRightsViewEntity::getRecordingDRNodeInstanceId));
+				//If of all the intended clearance values of a contract, one value occurs more often than the other, this should be considered the majority Intended Clearance Value.
+
+				int yes = (int) groupedByRecording.values().stream()
+					.map(list -> ClearanceValueConverter.convertToEntityAttributeFromInput(list.get(0).getIntendedClearance()))
+					.filter(ClearanceValue.YES::equals)
+					.count();
+
+				int no = (int) groupedByRecording.values().stream()
+					.map(list -> ClearanceValueConverter.convertToEntityAttributeFromInput(list.get(0).getIntendedClearance()))
+					.filter(ClearanceValue.NO::equals)
+					.count();
+
+				ClearanceValue majorityClearance = (yes >= no) ? ClearanceValue.YES : ClearanceValue.NO;
 				log.info("Migrating {} Recording levels", groupedByRecording.size());
 				Set<DigitalRightsToBeInserted> instanceIdToBeMigrated = new HashSet<>();
-				groupedByRecording.forEach((key, value) -> statistics.merge(migrateForOneRecording(key, value, actionId, instanceIdToBeMigrated, existingPerpetualRights)));
+				groupedByRecording.forEach(
+					(key, value) -> statistics.merge(migrateForOneRecording(key, value, majorityClearance, actionId, instanceIdToBeMigrated, existingPerpetualRights)));
 			}
 			// execute validation for those where No Digital Rights was defined before
 			Set<InputPerpetualRightsViewEntity> noDigitalRighstOnAnyLevelInputRows =
@@ -119,7 +133,8 @@ public class MigrationService {
 		return statistics;
 	}
 
-	private MigrationStatistics migrateForOneRecording(Integer digitalRightsInstanceId, List<InputPerpetualRightsViewEntity> rights, Integer actionId,
+	private MigrationStatistics migrateForOneRecording(Integer digitalRightsInstanceId, List<InputPerpetualRightsViewEntity> rights, ClearanceValue majorityClearance,
+		Integer actionId,
 		Set<DigitalRightsToBeInserted> instanceIdToBeMigrated, List<DigitalRightsNodeInstanceAndClearanceData> existingPerpetualRights) {
 		MigrationStatistics statistics = new MigrationStatistics();
 		try {
@@ -138,14 +153,16 @@ public class MigrationService {
 				return statistics;
 			}
 
-			InheritedAndIntendedData dataDefinedByRules = defineTheFutureDigitalRightDataByRules(rightOne);
-			DigitalRightsToBeInserted toBeInserted = dataDefinedByRules.getIntendedData();
-			if (dataDefinedByRules.getInheritedClearance() == dataDefinedByRules.getIntendedData().getClearanceValue()) {
+			//If something to be inserted
+			InheritedAndIntendedData dataDefinedByRules = defineTheFutureDigitalRightDataByRules(rightOne, majorityClearance);
+			if (dataDefinedByRules.isSkipped()) {
 				//If the Intended Clearance Value is equals the Inherited Clearance Value, then no backfill clearance is necessary.
 				createSkippedProtocolEntry(rights, actionId, digitalRightsInstanceId, ResultStatus.SKIPPED, INTENDED_CLEARANCE_INHERITED_CLEARANCE);
 				statistics.incrementSkippedCount(rights.size());
 				return statistics;
 			}
+
+			DigitalRightsToBeInserted toBeInserted = dataDefinedByRules.getIntendedData();
 
 			//Skip the already migrated rows
 			DigitalRightsToBeInserted existingMigrated = migratedPerpetualRightsContainsNodeInstance(instanceIdToBeMigrated, toBeInserted);
@@ -162,7 +179,7 @@ public class MigrationService {
 				}
 				return statistics;
 			}
-
+			//skip, if there is something manually set on the same nodeInstance
 			DigitalRightsNodeInstanceAndClearanceData existingManually = existingPerpetualRightsContainsNodeInstance(existingPerpetualRights, toBeInserted);
 			if (existingManually != null) {
 				if (Objects.equals(ClearanceValueConverter.convertToEntityAttributeFromInput(existingManually.getClearance()), toBeInserted.getClearanceValue())
@@ -179,7 +196,7 @@ public class MigrationService {
 				}
 				return statistics;
 			}
-
+			//at this point remains only the data, which is to be inserted
 			createNewDigitalRightsFromData(digitalRightsInstanceId, rights, actionId, instanceIdToBeMigrated, rightOne, toBeInserted, statistics);
 
 		} catch (Exception e) {
@@ -189,47 +206,73 @@ public class MigrationService {
 		return statistics;
 	}
 
-	private InheritedAndIntendedData defineTheFutureDigitalRightDataByRules(InputPerpetualRightsViewEntity rightOne) {
+	private InheritedAndIntendedData defineTheFutureDigitalRightDataByRules(InputPerpetualRightsViewEntity rightOne, ClearanceValue majorityClearance) {
 		//The kernel of the CAS-15082
 		//the row bundle for the same recording should be the same Clearance Value at this point, so we use only the first row to define
-		String inheritedClearanceValue = null;
+		ClearanceValue inheritedClearance = ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getInheritedClearance());
+		ClearanceValue intendedClearance = ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getIntendedClearance());
+
 		Integer toBeInsertedNodeInstanceId;
 		String territory = rightOne.getTerritory();
-		String territoryToBeInserted = null;
-		if (StringUtils.isNotEmpty(rightOne.getRecordingMasterClearance())) {
-			inheritedClearanceValue = rightOne.getRecordingMasterClearance();
-			toBeInsertedNodeInstanceId = rightOne.getRecordingDRNodeInstanceId();
-			if (StringUtils.isNotEmpty(rightOne.getRecordingDRTerritory()) && !Objects.equals(territory, rightOne.getRecordingDRTerritory())) {
-				territoryToBeInserted = rightOne.getRecordingDRTerritoryExpression();
+		String toBeInsertedTerritory = null;
+
+		if (StringUtils.isNotEmpty(rightOne.getRecordingMasterClearance())
+			|| StringUtils.isNotEmpty(rightOne.getPeriodMasterClearance())) {
+			//if the Intended Clearance Value equals the Recording's or Period's Clearance Value, then no backfill is necessary.
+			if (ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getInheritedClearance())
+				== ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getIntendedClearance())) {
+				return InheritedAndIntendedData.builder()
+					.isSkipped(true)
+					.build();
 			}
-		} else if (StringUtils.isNotEmpty(rightOne.getPeriodMasterClearance())) {
-			inheritedClearanceValue = rightOne.getPeriodMasterClearance();
-			toBeInsertedNodeInstanceId = rightOne.getPeriodDRNodeInstanceId();
-			if (StringUtils.isNotEmpty(rightOne.getPeriodDRTerritory()) && !Objects.equals(territory, rightOne.getPeriodDRTerritory())) {
-				territoryToBeInserted = rightOne.getPeriodDRTerritoryExpression();
-			}
-		} else if (StringUtils.isNotEmpty(rightOne.getContractMasterClearance())) {
-			inheritedClearanceValue = rightOne.getContractMasterClearance();
-			toBeInsertedNodeInstanceId = rightOne.getContractDRNodeInstanceId();
-			if (StringUtils.isNotEmpty(rightOne.getContractDRTerritory()) && !Objects.equals(territory, rightOne.getContractDRTerritory())) {
-				territoryToBeInserted = rightOne.getContractDRTerritoryExpression();
-			}
-		} else {
-			toBeInsertedNodeInstanceId = rightOne.getContractDRNodeInstanceId();
 		}
 
-		String intendedClearanceValue = StringUtils.isNotEmpty(rightOne.getPerpetualRightsException()) ?
-			rightOne.getPerpetualRightsException() :
-			rightOne.getPerpetualRights();
-		ClearanceValue intendedClearance = ClearanceValueConverter.convertToEntityAttributeFromInput(intendedClearanceValue);
+		if (StringUtils.isNotEmpty(rightOne.getRecordingMasterClearance())) {
+			toBeInsertedNodeInstanceId = rightOne.getRecordingDRNodeInstanceId();
+			if (StringUtils.isNotEmpty(rightOne.getRecordingDRTerritory()) && !Objects.equals(territory, rightOne.getRecordingDRTerritory())) {
+				toBeInsertedTerritory = rightOne.getRecordingDRTerritoryExpression();
+			}
+		} else if (StringUtils.isNotEmpty(rightOne.getPeriodMasterClearance())) {
+			toBeInsertedNodeInstanceId = rightOne.getPeriodDRNodeInstanceId();
+			if (StringUtils.isNotEmpty(rightOne.getPeriodDRTerritory()) && !Objects.equals(territory, rightOne.getPeriodDRTerritory())) {
+				toBeInsertedTerritory = rightOne.getPeriodDRTerritoryExpression();
+			}
+		} else if (StringUtils.isNotEmpty(rightOne.getContractMasterClearance())
+			&& inheritedClearance == majorityClearance) {
+			if (intendedClearance == majorityClearance) {
+				return InheritedAndIntendedData.builder()
+					.isSkipped(true)
+					.build();
+			} else {
+				toBeInsertedNodeInstanceId = rightOne.getContractDRNodeInstanceId();
+				if (StringUtils.isNotEmpty(rightOne.getContractDRTerritory()) && !Objects.equals(territory, rightOne.getContractDRTerritory())) {
+					toBeInsertedTerritory = rightOne.getContractDRTerritoryExpression();
+				}
+			}
+		} else { // hasMaster Clearance and inheritedClearance != majorityClearance
+			// OR has no master clearance
+			if (intendedClearance == majorityClearance) {
+				toBeInsertedNodeInstanceId = rightOne.getContractDRNodeInstanceId();
+				if (StringUtils.isNotEmpty(rightOne.getContractDRTerritory()) && !Objects.equals(territory, rightOne.getContractDRTerritory())) {
+					toBeInsertedTerritory = rightOne.getContractDRTerritoryExpression();
+				}
+			} else {
+				toBeInsertedNodeInstanceId = rightOne.getRecordingDRNodeInstanceId();
+				if (StringUtils.isNotEmpty(rightOne.getRecordingDRTerritory()) && !Objects.equals(territory, rightOne.getRecordingDRTerritory())) {
+					toBeInsertedTerritory = rightOne.getRecordingDRTerritoryExpression();
+				}
+			}
+		}
 
 		DigitalRightsToBeInserted toBeInserted = DigitalRightsToBeInserted.builder()
 			.nodeInstanceId(toBeInsertedNodeInstanceId)
-			.clearanceValue(intendedClearance)
-			.territory(territoryToBeInserted).build();
+			.clearanceValue((intendedClearance))
+			.territory(toBeInsertedTerritory).build();
 
-		return InheritedAndIntendedData.builder().inheritedClearance(ClearanceValueConverter.convertToEntityAttributeFromInput(inheritedClearanceValue))
-			.intendedData(toBeInserted).build();
+		return InheritedAndIntendedData.builder()
+			.inheritedClearance(inheritedClearance)
+			.intendedData(toBeInserted)
+			.build();
 	}
 
 	private void createNewDigitalRightsFromData(Integer digitalRightsInstanceId, List<InputPerpetualRightsViewEntity> rights, Integer actionId,
@@ -259,6 +302,7 @@ public class MigrationService {
 				.approvalTerm(toBeInserted.getClearanceValue() == ClearanceValue.YES)
 				.draRightsHierarchyId(PERPETUAL_HIERARCHY_ID)
 				.territory(toBeInserted.getTerritory())
+				.modStamp(LocalDateTime.now())
 				.modUser(ADMIN_USER)
 				.statusFlag(true)
 				.build());
