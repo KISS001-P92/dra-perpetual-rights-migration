@@ -113,6 +113,7 @@ public class MigrationService {
 					.count();
 
 				ClearanceValue majorityClearance = (yes >= no) ? ClearanceValue.YES : ClearanceValue.NO;
+				log.info("Majority Clearance = {} for Contract: {}", majorityClearance, contractId);
 				log.info("Migrating {} Recording levels", groupedByRecording.size());
 				Set<DigitalRightsToBeInserted> instanceIdToBeMigrated = new HashSet<>();
 				groupedByRecording.forEach(
@@ -219,8 +220,7 @@ public class MigrationService {
 		if (StringUtils.isNotEmpty(rightOne.getRecordingMasterClearance())
 			|| StringUtils.isNotEmpty(rightOne.getPeriodMasterClearance())) {
 			//if the Intended Clearance Value equals the Recording's or Period's Clearance Value, then no backfill is necessary.
-			if (ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getInheritedClearance())
-				== ClearanceValueConverter.convertToEntityAttributeFromInput(rightOne.getIntendedClearance())) {
+			if (inheritedClearance == intendedClearance) {
 				return InheritedAndIntendedData.builder()
 					.isSkipped(true)
 					.build();
@@ -244,9 +244,9 @@ public class MigrationService {
 					.isSkipped(true)
 					.build();
 			} else {
-				toBeInsertedNodeInstanceId = rightOne.getContractDRNodeInstanceId();
-				if (StringUtils.isNotEmpty(rightOne.getContractDRTerritory()) && !Objects.equals(territory, rightOne.getContractDRTerritory())) {
-					toBeInsertedTerritory = rightOne.getContractDRTerritoryExpression();
+				toBeInsertedNodeInstanceId = rightOne.getRecordingDRNodeInstanceId();
+				if (StringUtils.isNotEmpty(rightOne.getRecordingDRTerritory()) && !Objects.equals(territory, rightOne.getRecordingDRTerritory())) {
+					toBeInsertedTerritory = rightOne.getRecordingDRTerritoryExpression();
 				}
 			}
 		} else { // hasMaster Clearance and inheritedClearance != majorityClearance
