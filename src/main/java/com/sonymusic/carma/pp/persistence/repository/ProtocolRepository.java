@@ -28,4 +28,17 @@ public interface ProtocolRepository extends JpaRepository<ProtocolEntity, Long> 
 
 	@Query(value = "SELECT contract_id FROM dra_perpetual_rights_migration_protocol WHERE status_flag='A' AND result_status='SUCCESS' AND (digital_rights_contract_eu_id is not null OR digital_rights_contract_us_id is not null) AND dra_perpetual_rights_migration_input_id IN (:draPerpetualRightsMigrationInputIds)", nativeQuery = true)
 	Set<Integer> getAllSuccessedAndNewDigitalRights(Set<Integer> draPerpetualRightsMigrationInputIds);
+
+	@Query(value = "SELECT dp.contract_id FROM dra_perpetual_rights_migration_protocol dp"
+		+ " JOIN v_dra_perpetual_rights_migration_input vi ON dp.dra_perpetual_rights_migration_input_id = vi.id"
+		+ " WHERE dp.status_flag='A' AND vi.status_flag='A' AND dp.result_status='SUCCESS' "
+		+ " AND (dp.digital_rights_contract_eu_id is not null OR dp.digital_rights_contract_us_id is not null) "
+		+ " AND vi.country_id IN (:countryIds)", nativeQuery = true)
+	Set<Integer> getContractIdsWhereNewDigitalRightExistsByCountryIds(Set<String> countryIds);
+
+	@Query(value = "SELECT dp.contract_id FROM dra_perpetual_rights_migration_protocol dp"
+		+ " WHERE dp.status_flag='A' AND dp.result_status='SUCCESS' "
+		+ " AND (dp.digital_rights_contract_eu_id is not null OR dp.digital_rights_contract_us_id is not null) "
+		+ " AND dp.contract_id IN (:contractIds)", nativeQuery = true)
+	Set<Integer> getContractIdsWhereNewDigitalRightExistsByContractIds(Set<Integer> contractIds);
 }

@@ -10,11 +10,9 @@ import java.util.List;
 import java.util.Set;
 
 public interface CarmaRepository extends JpaRepository<CarmaEntityForNativeQueries, Integer> {
-	@Query(nativeQuery = true, name = "getContractIdUserExportedPairByCountryIds")
-	List<ContractIdUserExportedPair> getContractIdUserExportedPairByCountryIds(@Param("countryIds") List<String> countryIds);
 
 	@Query(nativeQuery = true, name = "getContractIdUserExportedPairByContractIds")
-	List<ContractIdUserExportedPair> getContractIdUserExportedPairByContractIds(@Param("contractIds") List<Integer> contractIds);
+	List<ContractIdUserExportedPair> getContractIdUserExportedPairByContractIds(@Param("contractIds") Set<Integer> contractIds);
 
 	@Query(nativeQuery = true, name = "getExistingPerpetualDigitalRightsForUSContracts")
 	List<DigitalRightsNodeInstanceAndClearanceData> getExistingPerpetualDigitalRightsForUSContracts(@Param("contractIds") Set<Integer> contractIds);
