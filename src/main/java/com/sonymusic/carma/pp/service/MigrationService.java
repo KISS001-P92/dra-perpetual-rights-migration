@@ -46,7 +46,12 @@ public class MigrationService {
 
 	public void migrateByContract(List<Integer> contractIds) {
 		log.info("Migration started with contracts {}", contractIds);
-		MigrationStatistics statistics = migrateAndValidate(rightsRepository.findByContractIdInAndStatusFlagIsNull(contractIds));
+		Integer actionId = protocolRepository.getNextActionId();
+		MigrationStatistics statistics = new MigrationStatistics(actionId);
+		for (Integer contractId : contractIds) {
+			List<InputPerpetualRightsViewEntity> listForOneContract = rightsRepository.findByContractIdAndStatusFlagIsNull(contractId);
+			statistics.merge(migrateAndValidate(actionId, listForOneContract));
+		}
 		statistics.addContractIds(contractIds);
 		mailService.sendStatusMail(statistics);
 		log.info("Migration completed with contracts {}", contractIds);
@@ -54,27 +59,36 @@ public class MigrationService {
 
 	public void migrateByCountry(List<String> countryCodes) {
 		log.info("Migration started with countries {}", countryCodes);
-		MigrationStatistics statistics = migrateAndValidate(rightsRepository.findByCountryIdInAndStatusFlagIsNull(countryCodes));
-		statistics.addCountryCodes(countryCodes);
-		mailService.sendStatusMail(statistics);
-		log.info("Migration completed with countries {}", countryCodes);
+		for (String countryCode : countryCodes) {
+			List<Integer> contractIds = rightsRepository.getContractIdsByCountryId(countryCode);
+			Integer actionId = protocolRepository.getNextActionId();
+			MigrationStatistics statistics = new MigrationStatistics(actionId);
+			for (Integer contractId : contractIds) {
+				List<InputPerpetualRightsViewEntity> listForOneContract = rightsRepository.findByContractIdAndStatusFlagIsNull(contractId);
+				statistics.merge(migrateAndValidate(actionId, listForOneContract));
+			}
+			statistics.addCountryCodes(List.of(countryCode));
+			mailService.sendStatusMail(statistics);
+			log.info("Migration completed for country {}", countryCode);
+		}
 	}
 
-	private MigrationStatistics migrateAndValidate(List<InputPerpetualRightsViewEntity> rightsInput) {
-		Integer actionId = protocolRepository.getNextActionId();
+	private MigrationStatistics migrateAndValidate(Integer actionId, List<InputPerpetualRightsViewEntity> rightsInput) {
 		MigrationStatistics statistics = new MigrationStatistics(actionId);
 		//filter and manage invalid rows, exists only for other environment than Production
 		//missing contract
 		List<InputPerpetualRightsViewEntity> invalidRightsMissingContract = rightsInput.stream().filter(item -> item.getContractId() == null).toList();
 		createSkippedProtocolEntry(invalidRightsMissingContract, actionId, null, ResultStatus.FAILED, MISSING_CONTRACT);
 		statistics.incrementFailedCount(invalidRightsMissingContract.size());
-		//missing Recording
-		List<InputPerpetualRightsViewEntity> validRights = rightsInput.stream().filter(item -> item.getContractId() != null).toList();
+		if (!invalidRightsMissingContract.isEmpty()) {
+			return statistics;
+		}
+		List<InputPerpetualRightsViewEntity> validRights = rightsInput;
 		List<InputPerpetualRightsViewEntity> invalidRightsOnContractLevel = validRights.stream().filter(item -> item.getContractDRNodeInstanceId() == null).toList();
 		createSkippedProtocolEntry(invalidRightsOnContractLevel, actionId, null, ResultStatus.FAILED, MISSING_RECORDING);
 		statistics.incrementFailedCount(invalidRightsOnContractLevel.size());
 
-		List<InputPerpetualRightsViewEntity> validRightsWithRecording = rightsInput.stream().filter(item -> item.getContractDRNodeInstanceId() != null).toList();
+		List<InputPerpetualRightsViewEntity> validRightsWithRecording = validRights.stream().filter(item -> item.getContractDRNodeInstanceId() != null).toList();
 		statistics = runMigrationForValidRows(statistics, validRightsWithRecording, actionId);
 
 		return statistics;
@@ -94,7 +108,6 @@ public class MigrationService {
 			Map<Integer, List<InputPerpetualRightsViewEntity>> groupedByContract = validRightsWithRecording.stream()
 				.collect(Collectors.groupingBy(InputPerpetualRightsViewEntity::getContractId));
 			//Execute migration grouped by contract
-
 			for (Integer contractId : groupedByContract.keySet()) {
 				List<InputPerpetualRightsViewEntity> validRightsByContract = groupedByContract.get(contractId);
 				log.info("Migrating for Contract: {} contractId = {}", validRightsByContract.get(0).getContractNumber(), contractId);
@@ -119,15 +132,10 @@ public class MigrationService {
 				groupedByRecording.forEach(
 					(key, value) -> statistics.merge(migrateForOneRecording(key, value, majorityClearance, actionId, instanceIdToBeMigrated, existingPerpetualRights)));
 			}
-			// execute validation for those where No Digital Rights was defined before
-			Set<InputPerpetualRightsViewEntity> noDigitalRighstOnAnyLevelInputRows =
-				validRightsWithRecording.stream().filter(item -> StringUtils.isEmpty(item.getContractMasterClearance())
-					&& StringUtils.isEmpty(item.getPeriodMasterClearance())
-					&& StringUtils.isEmpty((item.getRecordingMasterClearance()))).collect(Collectors.toSet());
 
-			Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(
-				noDigitalRighstOnAnyLevelInputRows.stream().map(InputPerpetualRightsViewEntity::getId).collect(Collectors.toSet()));
-			log.info("Execute validation for those where No Digital Rights was defined before. Count: {}", contractIdsToBeValidate.size());
+			Set<Integer> contractIdsOfTheCurrentProcess = groupedByContract.keySet();
+
+			Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(contractIdsOfTheCurrentProcess);
 			List<Integer> failedValidation = validateDigitalRights(contractIdsToBeValidate);
 			statistics.addFailedValidationContractIds(failedValidation);
 		}
@@ -369,47 +377,56 @@ public class MigrationService {
 
 	public void clearByContract(List<Integer> contractIds) {
 		log.info("Deletion started with contracts {}", contractIds);
-		deleteData(rightsRepository.findByContractIdInAndStatusFlagIsA(contractIds));
+		deleteData(rightsRepository.findByContractIdInAndStatusFlagIsA(contractIds), Collections.emptyList());
 		log.info("Deletion completed with contracts {}", contractIds);
 	}
 
 	public void clearByCountry(List<String> countryCodes) {
 		log.info("Deletion started with countries {}", countryCodes);
-		deleteData(rightsRepository.findByCountryIdInAndStatusFlagIsA(countryCodes));
+		deleteData(rightsRepository.findByCountryIdInAndStatusFlagIsA(countryCodes), countryCodes);
 		log.info("Deletion completed with countries {}", countryCodes);
 	}
 
-	private void deleteData(List<InputPerpetualRightsViewEntity> rights) {
+	private void deleteData(List<InputPerpetualRightsViewEntity> rights, List<String> countryCodes) {
 		Set<Integer> contractIds = rights.stream().map(InputPerpetualRightsViewEntity::getContractId).collect(Collectors.toSet());
-		Set<Integer> inputIds = rights.stream().map(InputPerpetualRightsViewEntity::getId).collect(Collectors.toSet());
+		Set<String> contractNumbers = rights.stream().map(InputPerpetualRightsViewEntity::getContractNumber).collect(Collectors.toSet());
 		if (!rights.isEmpty()) {
 			if (rights.get(0).isUs()) {
-				List<Integer> digitalRightsIds = protocolRepository.selectDigitalRightsContractUSIdByInputViewIds(inputIds);
-				digitalRightsIds.forEach(digitalRightsUSRepository::deleteById);
-				inputIds.forEach(inputRightsUSRepository::updateCleared);
+				List<Integer> digitalRightsIds;
+				if (!countryCodes.isEmpty()) {
+					digitalRightsIds = protocolRepository.selectDigitalRightsContractUSIdByCountryIds(countryCodes);
+				} else {
+					digitalRightsIds = protocolRepository.selectDigitalRightsContractUSIdByContractIds(contractIds);
+				}
+				if (!digitalRightsIds.isEmpty()) {
+					digitalRightsUSRepository.deleteByIds(digitalRightsIds);
+				}
+				inputRightsUSRepository.updateCleared(contractNumbers);
 			} else {
-				List<Integer> digitalRightsIds = protocolRepository.selectDigitalRightsContractEUIdByInputViewIds(inputIds);
-				digitalRightsIds.forEach(digitalRightsEURepository::deleteById);
-				inputIds.forEach(inputRightsEURepository::updateCleared);
+				List<Integer> digitalRightsIds;
+				if (!countryCodes.isEmpty()) {
+					digitalRightsIds = protocolRepository.selectDigitalRightsContractEUIdByCountryIds(countryCodes);
+				} else {
+					digitalRightsIds = protocolRepository.selectDigitalRightsContractEUIdByContractIds(contractIds);
+				}
+				if (!digitalRightsIds.isEmpty()) {
+					digitalRightsEURepository.deleteByIds(digitalRightsIds);
+				}
+				inputRightsEURepository.updateCleared(contractNumbers);
 			}
-			// delete validation for those where No Digital Rights was defined before
-			Set<InputPerpetualRightsViewEntity> noDigitalRighstOnAnyLevelInputRows =
-				rights.stream().filter(item -> StringUtils.isEmpty(item.getContractMasterClearance())
-					&& StringUtils.isEmpty(item.getPeriodMasterClearance())
-					&& StringUtils.isEmpty((item.getRecordingMasterClearance()))).collect(Collectors.toSet());
 
-			Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(
-				noDigitalRighstOnAnyLevelInputRows.stream().map(InputPerpetualRightsViewEntity::getId).collect(Collectors.toSet()));
+			Set<Integer> contractIdsToBeValidate = protocolRepository.getAllSuccessedAndNewDigitalRights(contractIds);
 			List<Integer> failedValidation = validateDigitalRights(contractIdsToBeValidate);
-
-			contractIds.forEach(protocolRepository::deleteAllByContractId);
+			protocolRepository.deleteAllByContractIds(contractIds);
 
 		}
+
 	}
 
 	private List<Integer> validateDigitalRights(Set<Integer> contractIds) {
 		String url = preferenceRepository.getValueByName("carma.server.url") + "/dra-interface/digital-rights";
 		List<Integer> validationFailed = new ArrayList<>();
+		log.info("Execute validation for contractIds: {}", contractIds);
 		for (Integer contractId : contractIds) {
 			if (!draValidator.validateDigitalRights(url, contractId, MOD_USER)) {
 				validationFailed.add(contractId);

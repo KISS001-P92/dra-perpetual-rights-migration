@@ -5,7 +5,7 @@ import com.sonymusic.carma.pp.model.SendingDraStatistics;
 import com.sonymusic.carma.pp.persistence.entity.ContractIdUserExportedPair;
 import com.sonymusic.carma.pp.persistence.repository.CarmaRepository;
 import com.sonymusic.carma.pp.persistence.repository.ProtocolRepository;
-import com.sonymusic.carma.sapi.dra.message.MigrationMessage;
+import com.sonymusic.carma.sapi.dra.message.DigitalRightsChangedMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -58,7 +58,7 @@ public class SendToDraService {
 			statistics.setSkippedCount(skippedContractIds.size());
 			statistics.setSentCount(userExportedContractIds.size());
 			userExportedContractIds.forEach(contractId ->
-				draExportJmsSender.sendMessage(new MigrationMessage(contractId, MigrationService.MOD_USER))
+				draExportJmsSender.sendMessage(new DigitalRightsChangedMessage(contractId, MigrationService.MOD_USER))
 			);
 		}
 		return statistics;

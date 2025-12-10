@@ -6,16 +6,20 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.RepositoryDefinition;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
+
 @RepositoryDefinition(domainClass = PerpetualRightsMigrationInputEU.class, idClass = Integer.class)
 public interface InputRightsEURepository {
 
 	@Transactional
 	@Modifying
-	@Query(value = "UPDATE dra_perpetual_rights_migration_input_eu SET status_flag = 'A', mod_stamp = NOW(), mod_user = 99999998 WHERE  id = :id", nativeQuery = true)
+	@Query(value = "UPDATE dra_perpetual_rights_migration_input_eu SET status_flag = 'A', mod_stamp = NOW(), mod_user = 99999998"
+		+ " WHERE  id = :id", nativeQuery = true)
 	void updateProcessed(Integer id);
 
 	@Transactional
 	@Modifying
-	@Query(value = "UPDATE dra_perpetual_rights_migration_input_eu SET status_flag = 'D', mod_stamp = NOW(), mod_user = 99999998 WHERE status_flag='A' AND id = :id", nativeQuery = true)
-	void updateCleared(Integer id);
+	@Query(value = "UPDATE dra_perpetual_rights_migration_input_eu SET status_flag = 'D', mod_stamp = NOW(), mod_user = 99999998 "
+		+ " WHERE status_flag='A' AND \"Contract\" IN :contractNumbers", nativeQuery = true)
+	void updateCleared(Set<String> contractNumbers);
 }
